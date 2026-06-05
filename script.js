@@ -67,6 +67,7 @@ const adminPassword = '1583ADMIN'; // Mot de passe pour accéder au panneau admi
 let isAdmin = false;
 let posts = [];
 let likedPosts = [];
+let likedPostsHistory = [];
 let sharedPosts = [];
 let userVotes = {};
 let editingPostId = null;
@@ -147,6 +148,7 @@ function loadPosts() {
     if (!post.giveawayWinner) post.giveawayWinner = null;
   });
   likedPosts = JSON.parse(localStorage.getItem('likedPosts')) || [];
+  loadLikedHistory();
   loadSharedPosts();
 }
 
@@ -217,12 +219,20 @@ function saveLikedPosts() {
   localStorage.setItem('likedPosts', JSON.stringify(likedPosts));
 }
 
+function saveLikedHistory() {
+  localStorage.setItem('likedPostsHistory', JSON.stringify(likedPostsHistory));
+}
+
 function saveSharedPosts() {
   localStorage.setItem('sharedPosts', JSON.stringify(sharedPosts));
 }
 
 function loadSharedPosts() {
   sharedPosts = JSON.parse(localStorage.getItem('sharedPosts')) || [];
+}
+
+function loadLikedHistory() {
+  likedPostsHistory = JSON.parse(localStorage.getItem('likedPostsHistory')) || [];
 }
 
 function loadVotedPolls() {
@@ -1622,6 +1632,11 @@ function toggleLike(postId) {
   } else {
     likedPosts.push(postId);
     post.likes++;
+    if (!likedPostsHistory.includes(postId)) {
+      likedPostsHistory.push(postId);
+      saveLikedHistory();
+      awardProfileXp(10, 'aimer un post');
+    }
   }
   if (firestoreReady) {
     postsCollection.doc(postId).update({ likes: post.likes }).catch(error => {
@@ -1630,9 +1645,6 @@ function toggleLike(postId) {
   }
   savePosts();
   saveLikedPosts();
-  if (index === -1) {
-    awardProfileXp(10, 'aimer un post');
-  }
   renderPosts();
 }
 
