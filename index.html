@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>tomate2.0 Web</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-content header-top-bar">
+      <div class="header-profile-summary">
+        <div id="headerProfileAvatarWrapper" class="avatar-wrapper">
+          <img id="headerProfileAvatar" class="header-profile-avatar" src="https://via.placeholder.com/80?text=Avatar" alt="Avatar du profil" />
+        </div>
+        <div class="header-profile-info">
+          <span id="headerProfileName" class="header-profile-name">Invité</span>
+          <span id="headerCoinCount" class="header-coin-count">0 💎</span>
+          <span id="headerProfileLevel" class="header-profile-level">Niveau 1 / 100</span>
+          <div class="header-profile-progress">
+            <div id="headerProfileProgressFill" class="header-profile-progress-fill"></div>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="profileToggle" class="button button-secondary">Mon profil</button>
+        <button id="shopToggle" class="button button-secondary">Shop</button>
+        <button id="leaderboardToggle" class="button button-secondary">Classement</button>
+        <button id="themeToggle" class="theme-toggle">Mode sombre</button>
+      </div>
+    </div>
+    <div class="container header-content">
+      <h1>Bienvenue sur mon site web</h1>
+    </div>
+  </header>
+
+  <main>
+    <section class="shop-section container hidden" id="shopSection">
+      <div class="shop-header">
+        <h2>Boutique des Bordures</h2>
+        <p>Achète des bordures uniques avec tes pièces.</p>
+      </div>
+      <div id="shopGrid" class="shop-grid"></div>
+    </section>
+
+    <section class="profile-section container hidden" id="profileSection">
+      <div class="profile-panel">
+        <div class="profile-avatar-wrapper">
+          <div id="profileAvatarBorderWrapper" class="avatar-wrapper">
+            <img id="profileAvatar" class="profile-avatar" src="https://via.placeholder.com/120?text=Avatar" alt="Avatar du profil" />
+          </div>
+          <label for="profileAvatarInput" class="button button-secondary avatar-upload-label">Changer l’image</label>
+          <input id="profileAvatarInput" type="file" accept="image/*" hidden />
+        </div>
+        <div class="profile-content">
+          <h2>Mon profil</h2>
+          <p class="profile-description">Crée ton profil, gagne de l’expérience et débloque des récompenses jusqu’au niveau 100.</p>
+          <div class="profile-status">
+            <div class="profile-name">
+              <span id="profileNameDisplay">Invité</span>
+            </div>
+            <div class="profile-level" id="profileLevelDisplay">Niveau 1 / 100</div>
+            <div class="profile-progress">
+              <div class="progress-bar">
+                <div id="profileProgressFill" class="progress-fill"></div>
+              </div>
+              <span id="profileXpText">0 / 100 XP</span>
+            </div>
+            <p id="profileRewardMessage" class="profile-reward-message">Débloque des niveaux pour gagner des récompenses.</p>
+            <div class="profile-coins">Pièces : <span id="profileCoinCount">0</span>💎</div>
+            <div class="profile-battle-pass">
+              <button id="battlePassClaimButton" class="button button-secondary">Réclamer Battle Pass</button>
+              <span id="battlePassStatus" class="battle-pass-status">Clique pour réclamer ton Battle Pass.</span>
+            </div>
+            <div id="adminLevelActions" class="admin-level-actions hidden">
+              <label for="adminLevelAmount">Niveaux à ajouter</label>
+              <input id="adminLevelAmount" type="number" min="1" value="1" />
+              <button type="button" id="addProfileLevelButton" class="button button-secondary">Ajouter des niveaux</button>
+            </div>
+            <p id="profileBorderLabel" class="profile-border-label"></p>
+          </div>
+        </div>
+      </div>
+      <div class="profile-settings">
+        <label for="profileNameInput">Nom de profil</label>
+        <input id="profileNameInput" type="text" placeholder="Ton nom" />
+        <button id="saveProfileButton" class="button">Sauvegarder le profil</button>
+        <button id="deleteAccountButton" class="button button-secondary">Supprimer mon compte</button>
+      </div>
+      <div class="profile-rewards">
+        <h3>Récompenses disponibles</h3>
+        <ul id="rewardList" class="reward-list"></ul>
+      </div>
+      <div class="profile-borders">
+        <h3>Bordures disponibles</h3>
+        <div id="borderOptions" class="border-options"></div>
+      </div>
+    </section>
+
+    <section class="leaderboard-section container hidden" id="leaderboardSection">
+      <div class="leaderboard-header">
+        <div>
+          <h2>Classement des 100 meilleurs</h2>
+          <p>Les joueurs les mieux classés selon leur niveau, avec leur bordure et leur avatar.</p>
+        </div>
+      </div>
+      <div class="leaderboard-grid">
+        <div class="leaderboard-list-panel">
+          <div id="leaderboardList" class="leaderboard-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modal pour le profil détaillé -->
+    <div id="leaderboardModal" class="modal hidden">
+      <div class="modal-content">
+        <button id="closeLeaderboardModal" class="modal-close">✕</button>
+        <div id="leaderboardProfileCard" class="leaderboard-profile-card">
+          <div id="leaderboardAvatarWrapper" class="avatar-wrapper">
+            <img id="leaderboardProfileAvatar" class="profile-avatar leaderboard-profile-avatar" src="https://via.placeholder.com/120?text=Avatar" alt="Avatar du joueur" />
+          </div>
+          <div class="leaderboard-profile-info">
+            <div id="leaderboardProfileName" class="leaderboard-profile-name">Invité</div>
+            <div id="leaderboardProfileLevel" class="leaderboard-profile-level">Niveau 1</div>
+            <div id="leaderboardProfileXpText" class="leaderboard-profile-xp">0 XP</div>
+            <div id="leaderboardProfileBorder" class="leaderboard-profile-border">Bordure : Aucune</div>
+            <div id="leaderboardProfileBadges" class="leaderboard-profile-badges"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="shopModal" class="modal hidden">
+      <div class="modal-content shop-modal-content">
+        <button id="closeShopModal" class="modal-close">✕</button>
+        <div class="shop-header">
+          <h2>Boutique des Bordures</h2>
+          <p>Achète des bordures uniques avec tes pièces.</p>
+        </div>
+        <div id="shopGridModal" class="shop-grid"></div>
+      </div>
+    </div>
+
+    <section class="posts-section container" id="posts">
+      <div class="posts-header">
+        <div>
+          <h2>Posts de tomate2.0</h2>
+          <p>Seul l’admin peut créer un post.</p>
+        </div>
+        <button id="adminToggle" class="button button-secondary">Accès admin</button>
+      </div>
+
+      <div id="adminPanel" class="admin-panel hidden">
+        <div class="admin-login">
+          <label for="adminPassword">Mot de passe admin</label>
+          <input id="adminPassword" type="password" placeholder="Mot de passe admin" />
+          <button type="button" id="adminLoginButton" class="button">Se connecter</button>
+        </div>
+
+        <div id="postFormContainer" class="post-form hidden">
+          <h3>Créer un nouveau post</h3>
+          <label for="postTitle">Titre</label>
+          <input id="postTitle" type="text" placeholder="Titre du post" />
+
+          <label for="postText">Texte</label>
+          <textarea id="postText" rows="4" placeholder="Ton message..."></textarea>
+
+          <label for="postMediaType">Type de média</label>
+          <select id="postMediaType">
+            <option value="none">Aucun</option>
+            <option value="image">Image</option>
+            <option value="video">Vidéo</option>
+          </select>
+
+          <label for="postMediaUrl">URL de l'image ou de la vidéo</label>
+          <input id="postMediaUrl" type="url" placeholder="https://..." />
+
+          <label class="checkbox-label" for="postHasPoll">
+            <input id="postHasPoll" type="checkbox" /> Ajouter un sondage
+          </label>
+
+          <div id="pollFields" class="poll-fields hidden">
+            <label for="pollQuestion">Question du sondage</label>
+            <input id="pollQuestion" type="text" placeholder="Par exemple : Quel est ton jeu préféré ?" />
+            <label class="checkbox-label" for="pollMultipleChoices">
+              <input id="pollMultipleChoices" type="checkbox" /> Autoriser plusieurs choix
+            </label>
+            <div id="pollOptionsContainer" class="poll-options-container">
+              <label>Options de sondage</label>
+              <input class="poll-option-input" type="text" placeholder="Option 1" />
+              <input class="poll-option-input" type="text" placeholder="Option 2" />
+            </div>
+            <button id="addPollOptionButton" type="button" class="button button-secondary">Ajouter une option</button>
+          </div>
+
+          <label for="postGiveawayAmount">Montant du giveaway</label>
+          <input id="postGiveawayAmount" type="number" min="0" placeholder="Pièces à gagner (laisser vide si pas de giveaway)" />
+
+          <button type="button" id="addPostButton" class="button">Ajouter le post</button>
+          <p class="admin-hint">.</p>
+        </div>
+
+        <div id="levelsManagementContainer" class="levels-management hidden">
+          <h3>Gestion des récompenses par niveau</h3>
+          <div id="levelsContainer" class="levels-container"></div>
+          <button type="button" id="addLevelButton" class="button button-secondary">Ajouter un niveau</button>
+          <button type="button" id="applyLevelsButton" class="button">Appliquer les modifications</button>
+        </div>
+
+      </div>
+
+      <div id="postsGrid" class="posts-grid"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>© 2026 tomate2.0 Web. tout droit réservé.</p>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
