@@ -159,6 +159,7 @@ function savePosts() {
 let firestoreReady = false;
 let db = null;
 let postsCollection = null;
+let leaderboardCollection = null;
 
 function initFirebase() {
   const firebaseConfig = {
@@ -174,8 +175,11 @@ function initFirebase() {
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     postsCollection = db.collection('posts');
+    leaderboardCollection = db.collection('leaderboard');
     firestoreReady = true;
     subscribePosts();
+    subscribeLeaderboard();
+    updateLeaderboardForCurrentUser();
   } catch (error) {
     console.warn('Firebase n\'a pas pu être initialisé :', error);
   }
@@ -215,6 +219,29 @@ function subscribePosts() {
   });
 }
 
+function subscribeLeaderboard() {
+  if (!firestoreReady || !leaderboardCollection) return;
+  leaderboardCollection.orderBy('totalXp', 'desc').onSnapshot(snapshot => {
+    leaderboardUsers = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      leaderboardUsers.push({
+        id: data.id || doc.id,
+        name: data.name || 'Invité',
+        avatar: data.avatar || 'https://via.placeholder.com/80?text=Avatar',
+        totalXp: typeof data.totalXp === 'number' ? data.totalXp : 0,
+        rewards: Array.isArray(data.rewards) ? data.rewards : [],
+        ownedBorders: Array.isArray(data.ownedBorders) ? data.ownedBorders : [],
+        selectedBorder: data.selectedBorder || '',
+        coins: typeof data.coins === 'number' ? data.coins : 0
+      });
+    });
+    renderLeaderboard();
+  }, error => {
+    console.error('Erreur Firestore leaderboard :', error);
+  });
+}
+
 function saveLikedPosts() {
   localStorage.setItem('likedPosts', JSON.stringify(likedPosts));
 }
@@ -243,6 +270,10 @@ function saveVotedPolls() {
   localStorage.setItem('userVotes', JSON.stringify(userVotes));
 }
 
+function generateUserId() {
+  return 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
+
 function loadProfile() {
   const stored = localStorage.getItem(PROFILE_KEY);
   if (stored) {
@@ -265,9 +296,16 @@ function loadProfile() {
     }
   }
   
-  // Initialiser firstVisitTime si c'est la première visite
+  // Initialiser firstVisitTime et ID utilisateur si c'est la première visite
   if (!userProfile.firstVisitTime) {
     userProfile.firstVisitTime = Date.now();
+    userProfile.id = generateUserId();
+    saveProfile();
+  }
+  
+  // Générer un ID si absent (pour les anciens profils)
+  if (!userProfile.id) {
+    userProfile.id = generateUserId();
     saveProfile();
   }
 }
@@ -275,7 +313,6 @@ function loadProfile() {
 function saveProfile() {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(userProfile));
   updateLeaderboardForCurrentUser();
-  saveLeaderboard();
   renderProfile();
 }
 
@@ -323,26 +360,11 @@ function createSampleLeaderboardUsers() {
 }
 
 function loadLeaderboard() {
-  const stored = localStorage.getItem(LEADERBOARD_KEY);
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        leaderboardUsers = parsed;
-      }
-    } catch (error) {
-      console.warn('Impossible de charger le classement :', error);
-    }
-  }
-
-  if (!leaderboardUsers || leaderboardUsers.length === 0 || (leaderboardUsers.length === 1 && leaderboardUsers[0].id === 'current-user')) {
-    leaderboardUsers = createSampleLeaderboardUsers();
-    saveLeaderboard();
-  }
+  // Leaderboard is loaded automatically via subscribeLeaderboard() from Firestore
 }
 
 function saveLeaderboard() {
-  localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboardUsers));
+  // Leaderboard changes are saved automatically to Firestore in updateLeaderboardForCurrentUser()
 }
 
 function getCurrentUserLeaderboardEntry() {
@@ -359,17 +381,24 @@ function getCurrentUserLeaderboardEntry() {
 }
 
 function updateLeaderboardForCurrentUser() {
-  const currentEntry = getCurrentUserLeaderboardEntry();
-  const existingIndex = leaderboardUsers.findIndex((entry) => entry.id === currentEntry.id);
-
-  if (existingIndex !== -1) {
-    leaderboardUsers[existingIndex] = currentEntry;
-  } else {
-    leaderboardUsers.push(currentEntry);
-  }
-
-  leaderboardUsers.sort((a, b) => getProfileLevel(b.totalXp) - getProfileLevel(a.totalXp) || b.totalXp - a.totalXp);
-  leaderboardUsers = leaderboardUsers.slice(0, 100);
+  if (!firestoreReady || !leaderboardCollection) return;
+  
+  const userId = userProfile.id || 'current-user';
+  const currentEntry = {
+    id: userId,
+    name: userProfile.name || 'Invité',
+    avatar: userProfile.avatar || 'https://via.placeholder.com/80?text=Avatar',
+    totalXp: userProfile.totalXp || 0,
+    rewards: Array.isArray(userProfile.rewards) ? userProfile.rewards : [],
+    ownedBorders: Array.isArray(userProfile.ownedBorders) ? userProfile.ownedBorders : [],
+    selectedBorder: userProfile.selectedBorder || '',
+    coins: userProfile.coins || 0
+  };
+  
+  // Sauvegarder dans Firestore avec l'ID utilisateur unique
+  leaderboardCollection.doc(userId).set(currentEntry).catch(error => {
+    console.error('Erreur mise à jour leaderboard :', error);
+  });
 }
 
 function getDisplayBadges(user) {
@@ -383,10 +412,11 @@ function showLeaderboardProfile(user) {
 
 function renderLeaderboard() {
   if (!leaderboardList) return;
-  leaderboardUsers.sort((a, b) => getProfileLevel(b.totalXp) - getProfileLevel(a.totalXp) || b.totalXp - a.totalXp);
+  const filteredUsers = leaderboardUsers.filter(u => !u.id.startsWith('rank-'));
+  filteredUsers.sort((a, b) => getProfileLevel(b.totalXp) - getProfileLevel(a.totalXp) || b.totalXp - a.totalXp);
   leaderboardList.innerHTML = '';
 
-  leaderboardUsers.slice(0, 100).forEach((user, index) => {
+  filteredUsers.slice(0, 100).forEach((user, index) => {
     const level = getProfileLevel(user.totalXp);
     const item = document.createElement('button');
     item.type = 'button';
@@ -762,12 +792,15 @@ function deleteAccount() {
     return;
   }
 
+  const userId = userProfile.id || 'current-user';
   localStorage.removeItem(PROFILE_KEY);
-  leaderboardUsers = leaderboardUsers.filter((entry) => entry.id !== 'current-user');
-  if (leaderboardUsers.length === 0) {
-    leaderboardUsers = createSampleLeaderboardUsers();
+  
+  // Supprimer du leaderboard Firestore
+  if (firestoreReady && leaderboardCollection) {
+    leaderboardCollection.doc(userId).delete().catch(error => {
+      console.error('Erreur suppression leaderboard :', error);
+    });
   }
-  saveLeaderboard();
 
   userProfile = {
     name: 'Invité',
@@ -778,7 +811,8 @@ function deleteAccount() {
     selectedBorder: '',
     coins: 0,
     battlePassClaimed: false,
-    firstVisitTime: Date.now()
+    firstVisitTime: Date.now(),
+    id: generateUserId()
   };
 
   renderProfile();
@@ -1097,7 +1131,8 @@ function renderPosts() {
       giveawayActions.className = 'giveaway-actions';
 
       const participants = Array.isArray(post.participants) ? post.participants : [];
-      const hasJoined = participants.some(p => p.id === 'current-user');
+      const userId = userProfile.id || 'current-user';
+      const hasJoined = participants.some(p => p.id === userId);
 
       if (!post.giveawayCompleted) {
         const joinBtn = document.createElement('button');
@@ -1168,11 +1203,12 @@ function joinGiveaway(postId) {
   const post = posts.find(p => p.id === postId);
   if (!post || !post.isGiveaway || post.giveawayCompleted) return;
   post.participants = Array.isArray(post.participants) ? post.participants : [];
-  if (post.participants.some(p => p.id === 'current-user')) {
+  const userId = userProfile.id || 'current-user';
+  if (post.participants.some(p => p.id === userId)) {
     alert('Tu es déjà inscrit au giveaway.');
     return;
   }
-  post.participants.push({ id: 'current-user', name: userProfile.name || 'Invité' });
+  post.participants.push({ id: userId, name: userProfile.name || 'Invité' });
   if (firestoreReady) {
     postsCollection.doc(postId).update({ participants: post.participants }).catch(error => {
       console.error('Erreur mise à jour giveaway Firestore :', error);
@@ -1201,15 +1237,22 @@ function launchGiveaway(postId) {
   post.giveawayCompleted = true;
   post.giveawayAwarded = post.giveawayAmount || 0;
 
-  if (winner.id === 'current-user') {
+  if (winner.id === (userProfile.id || 'current-user')) {
     userProfile.coins = (userProfile.coins || 0) + (post.giveawayAmount || 0);
     saveProfile();
     updateProfileMessage(`Tu as gagné ${formatCoinCount(post.giveawayAmount)} au giveaway !`);
   } else {
-    const winnerEntry = leaderboardUsers.find(u => u.id === winner.id);
-    if (winnerEntry) {
-      winnerEntry.coins = (winnerEntry.coins || 0) + (post.giveawayAmount || 0);
-      saveLeaderboard();
+    // Mettre à jour les coins du gagnant dans Firestore
+    if (firestoreReady && leaderboardCollection) {
+      const winnerEntry = leaderboardUsers.find(u => u.id === winner.id);
+      if (winnerEntry) {
+        const updatedCoins = (winnerEntry.coins || 0) + (post.giveawayAmount || 0);
+        leaderboardCollection.doc(winner.id).update({
+          coins: updatedCoins
+        }).catch(error => {
+          console.error('Erreur mise à jour coins giveaway :', error);
+        });
+      }
     }
     updateProfileMessage(`Giveaway terminé : ${winner.name} gagne ${formatCoinCount(post.giveawayAmount)}.`);
   }
@@ -1629,13 +1672,18 @@ function toggleLike(postId) {
   if (index > -1) {
     likedPosts.splice(index, 1);
     post.likes--;
+    console.log(`[DEBUG Like] Unlike ${postId}. History:`, likedPostsHistory);
   } else {
     likedPosts.push(postId);
     post.likes++;
+    console.log(`[DEBUG Like] Like ${postId}. Already in history?`, likedPostsHistory.includes(postId), 'History:', likedPostsHistory);
     if (!likedPostsHistory.includes(postId)) {
       likedPostsHistory.push(postId);
       saveLikedHistory();
+      console.log(`[DEBUG Like] Saved history:`, likedPostsHistory);
       awardProfileXp(10, 'aimer un post');
+    } else {
+      console.log(`[DEBUG Like] NO XP - Already liked before`);
     }
   }
   if (firestoreReady) {
@@ -2506,8 +2554,8 @@ if (addProfileLevelButton) {
 loadPosts();
 loadVotedPolls();
 loadProfile();
+initFirebase();
 loadLeaderboard();
-updateLeaderboardForCurrentUser();
 renderPosts();
 renderProfile();
 renderShop();
@@ -2517,5 +2565,7 @@ updateButtonText();
 startFreeBorderTimer();
 
 window.addEventListener('load', () => {
-  initFirebase();
+  if (!firestoreReady) {
+    initFirebase();
+  }
 });
