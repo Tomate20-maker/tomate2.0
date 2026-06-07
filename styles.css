@@ -277,6 +277,14 @@ body {
   gap: 1rem;
 }
 
+.admin-delete-section {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.admin-delete-section label,
 .admin-login label,
 .post-form label {
   font-weight: 600;
@@ -288,7 +296,8 @@ body {
   border-top: 1px solid var(--border);
 }
 
-.admin-hint {
+.admin-hint,
+.admin-delete-hint {
   margin: 0;
   color: var(--muted);
   font-size: 0.95rem;
@@ -985,6 +994,53 @@ textarea:focus {
   background: var(--surface, #fff);
 }
 
+.profile-login-section {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.profile-login-section h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.login-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.login-row input {
+  flex: 1 1 180px;
+  min-width: 180px;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+  background: var(--background);
+  color: var(--text);
+}
+
+.login-message {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+  color: var(--muted, #6b7280);
+}
+
+.profile-connection-info {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+}
+
+.profile-connection-info p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
 .profile-rewards {
   margin-top: 1.5rem;
 }
@@ -1047,6 +1103,13 @@ textarea:focus {
 
 .header-coin-count {
   margin-top: 0.35rem;
+  font-size: 0.95rem;
+  color: var(--muted, #6b7280);
+  font-weight: 600;
+}
+
+.visitor-counter {
+  margin-top: 0.8rem;
   font-size: 0.95rem;
   color: var(--muted, #6b7280);
   font-weight: 600;
@@ -1498,6 +1561,45 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
+.leaderboard-item-roles,
+.profile-roles-container,
+.header-profile-role-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.leaderboard-role-action {
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.header-role-badge,
+.leaderboard-role-badge,
+.profile-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.header-profile-role-container {
+  margin-top: 0.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.profile-role-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .leaderboard-detail-panel {
   display: grid;
   gap: 1rem;
@@ -1693,3 +1795,12 @@ textarea:focus {
   font-size: 0.95rem;
 }
 
+#deleteAccountButton {
+  background: #ef4444;
+  color: white;
+}
+
+#saveProfileButton {
+  background: #3b82f6;
+  color: white;
+}
