@@ -28,6 +28,12 @@ const profileRewardMessage = document.getElementById('profileRewardMessage');
 const adminLevelActions = document.getElementById('adminLevelActions');
 const adminLevelAmountInput = document.getElementById('adminLevelAmount');
 const addProfileLevelButton = document.getElementById('addProfileLevelButton');
+const removeProfileLevelButton = document.getElementById('removeProfileLevelButton');
+const adminRoleActions = document.getElementById('adminRoleActions');
+const adminRoleNameInput = document.getElementById('adminRoleNameInput');
+const adminRoleColorInput = document.getElementById('adminRoleColorInput');
+const addProfileRoleButton = document.getElementById('addProfileRoleButton');
+const profileRolesContainer = document.getElementById('profileRolesContainer');
 const shopToggle = document.getElementById('shopToggle');
 const shopModal = document.getElementById('shopModal');
 const closeShopModal = document.getElementById('closeShopModal');
@@ -36,17 +42,35 @@ const borderOptions = document.getElementById('borderOptions');
 const profileNameInput = document.getElementById('profileNameInput');
 const saveProfileButton = document.getElementById('saveProfileButton');
 const deleteAccountButton = document.getElementById('deleteAccountButton');
+const adminDeleteSection = document.getElementById('adminDeleteSection');
+const adminDeleteCodeInput = document.getElementById('adminDeleteCodeInput');
+const adminDeleteAccountButton = document.getElementById('adminDeleteAccountButton');
 const rewardList = document.getElementById('rewardList');
 const headerProfileAvatar = document.getElementById('headerProfileAvatar');
 const headerProfileAvatarWrapper = document.getElementById('headerProfileAvatarWrapper');
 const headerProfileName = document.getElementById('headerProfileName');
+const headerProfileRoleContainer = document.getElementById('headerProfileRoleContainer');
 const headerProfileLevel = document.getElementById('headerProfileLevel');
 const headerProfileProgressFill = document.getElementById('headerProfileProgressFill');
 const headerCoinCount = document.getElementById('headerCoinCount');
+const visitorCounterDisplay = document.getElementById('visitorCounter');
+const loginCodeInput = document.getElementById('loginCodeInput');
+const loginButton = document.getElementById('loginButton');
+const logoutButton = document.getElementById('logoutButton');
+const loginMessage = document.getElementById('loginMessage');
+const profileLoginCodeDisplay = document.getElementById('profileLoginCode');
+const profileConnectionInfo = document.getElementById('profileConnectionInfo');
 const battlePassClaimButton = document.getElementById('battlePassClaimButton');
 const battlePassStatus = document.getElementById('battlePassStatus');
 const profileCoinCount = document.getElementById('profileCoinCount');
 const LEADERBOARD_KEY = 'siteLeaderboard';
+const PROFILES_COLLECTION = 'profiles';
+const ACTIVE_VISITORS_COLLECTION = 'activeVisitors';
+let visitorDocId = localStorage.getItem('visitorDocId') || null;
+let visitorPresenceInterval = null;
+let visitorCountRefreshInterval = null;
+let activeVisitorDocs = [];
+let activeVisitorsUnsubscribe = null;
 const leaderboardList = document.getElementById('leaderboardList');
 const leaderboardProfileAvatar = document.getElementById('leaderboardProfileAvatar');
 const leaderboardAvatarWrapper = document.getElementById('leaderboardAvatarWrapper');
@@ -76,7 +100,7 @@ let contactName = '';
 let editedLevelRewards = {};
 
 const PROFILE_KEY = 'siteUserProfile';
-const MAX_LEVEL = 100;
+const MAX_LEVEL = 1000;
 const XP_PER_LEVEL = 100;
 const BATTLE_PASS_COINS = 0;
 const BORDER_SHOP = {
@@ -94,7 +118,20 @@ const LEVEL_COIN_MILESTONES = {
   70: 200,
   80: 200,
   90: 200,
-  100: 200
+  100: 200,
+  150: 500,
+  200: 500,
+  250: 500,
+  300: 500,
+  350: 500,
+  400: 500,
+  450: 500,
+  500: 1000,
+  600: 1000,
+  700: 1000,
+  800: 1000,
+  900: 1000,
+  1000: 2000
 };
 const LEVEL_REWARDS = {
   5: 'Badge Novice',
@@ -106,7 +143,8 @@ const LEVEL_REWARDS = {
   60: 'Bordure 2',
   75: 'Badge Élite',
   90: 'Bordure 3',
-  100: 'Badge Légende'
+  100: 'Badge Légende',
+  1000: 'Badge DIEUX'
 };
 
 let userProfile = {
@@ -118,7 +156,8 @@ let userProfile = {
   selectedBorder: '',
   coins: 0,
   battlePassClaimed: false,
-  firstVisitTime: null
+  firstVisitTime: null,
+  roles: []
 };
 
 const OPENAI_API_KEY = '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'; // Clé OpenAI non configurée par défaut, utilisation de l’IA locale.
@@ -160,6 +199,7 @@ let firestoreReady = false;
 let db = null;
 let postsCollection = null;
 let leaderboardCollection = null;
+let profilesCollection = null;
 
 function initFirebase() {
   const firebaseConfig = {
@@ -176,10 +216,15 @@ function initFirebase() {
     db = firebase.firestore();
     postsCollection = db.collection('posts');
     leaderboardCollection = db.collection('leaderboard');
+    profilesCollection = db.collection(PROFILES_COLLECTION);
     firestoreReady = true;
     subscribePosts();
     subscribeLeaderboard();
     updateLeaderboardForCurrentUser();
+    startVisitorPresence();
+    if (userProfile.loginCode) {
+      saveProfileToFirestore();
+    }
   } catch (error) {
     console.warn('Firebase n\'a pas pu être initialisé :', error);
   }
@@ -240,6 +285,64 @@ function subscribeLeaderboard() {
   }, error => {
     console.error('Erreur Firestore leaderboard :', error);
   });
+}
+
+function generateVisitorDocId() {
+  return `visitor_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getMinuteVisitorCount() {
+  const oneMinuteAgo = Date.now() - 60000;
+  return activeVisitorDocs.filter(doc => {
+    if (!doc.lastSeen || typeof doc.lastSeen.toDate !== 'function') return false;
+    return doc.lastSeen.toDate().getTime() >= oneMinuteAgo;
+  }).length;
+}
+
+function renderVisitorCount() {
+  if (!visitorCounterDisplay) return;
+  visitorCounterDisplay.textContent = String(getMinuteVisitorCount());
+}
+
+function subscribeVisitorCount() {
+  if (!firestoreReady || !db) return;
+  if (activeVisitorsUnsubscribe) {
+    activeVisitorsUnsubscribe();
+  }
+  const activeVisitorsRef = db.collection(ACTIVE_VISITORS_COLLECTION);
+  activeVisitorsUnsubscribe = activeVisitorsRef.onSnapshot(snapshot => {
+    activeVisitorDocs = snapshot.docs.map(doc => doc.data());
+    renderVisitorCount();
+  }, error => {
+    console.error('Erreur Firestore visiteurs :', error);
+  });
+
+  if (visitorCountRefreshInterval) {
+    clearInterval(visitorCountRefreshInterval);
+  }
+  visitorCountRefreshInterval = setInterval(renderVisitorCount, 5000);
+}
+
+function updateVisitorPresence() {
+  if (!firestoreReady || !db || !visitorDocId) return;
+  db.collection(ACTIVE_VISITORS_COLLECTION).doc(visitorDocId).set({
+    lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true }).catch(error => {
+    console.error('Erreur mise à jour présence visiteur :', error);
+  });
+}
+
+function startVisitorPresence() {
+  if (!visitorDocId) {
+    visitorDocId = generateVisitorDocId();
+    localStorage.setItem('visitorDocId', visitorDocId);
+  }
+  updateVisitorPresence();
+  if (visitorPresenceInterval) {
+    clearInterval(visitorPresenceInterval);
+  }
+  visitorPresenceInterval = setInterval(updateVisitorPresence, 15000);
+  subscribeVisitorCount();
 }
 
 function saveLikedPosts() {
@@ -311,9 +414,117 @@ function loadProfile() {
 }
 
 function saveProfile() {
+  if (!userProfile.loginCode && userProfile.name && userProfile.name !== 'Invité') {
+    userProfile.loginCode = generateLoginCode();
+  }
   localStorage.setItem(PROFILE_KEY, JSON.stringify(userProfile));
+  if (firestoreReady && userProfile.loginCode && profilesCollection) {
+    saveProfileToFirestore();
+  }
   updateLeaderboardForCurrentUser();
   renderProfile();
+}
+
+function saveProfileToFirestore() {
+  if (!firestoreReady || !profilesCollection || !userProfile.loginCode) return;
+  const profileDoc = {
+    id: userProfile.id || generateUserId(),
+    loginCode: userProfile.loginCode,
+    name: userProfile.name || 'Invité',
+    avatar: userProfile.avatar || '',
+    totalXp: userProfile.totalXp || 0,
+    rewards: Array.isArray(userProfile.rewards) ? userProfile.rewards : [],
+    ownedBorders: Array.isArray(userProfile.ownedBorders) ? userProfile.ownedBorders : [],
+    selectedBorder: userProfile.selectedBorder || '',
+    coins: userProfile.coins || 0,
+    battlePassClaimed: userProfile.battlePassClaimed || false,
+    firstVisitTime: userProfile.firstVisitTime || Date.now(),
+    roles: Array.isArray(userProfile.roles) ? userProfile.roles : []
+  };
+  profilesCollection.doc(userProfile.loginCode).set(profileDoc).catch(error => {
+    console.error('Erreur sauvegarde profil Firestore :', error);
+  });
+}
+
+function sanitizeProfileData(data) {
+  return {
+    ...userProfile,
+    id: data.id || userProfile.id || generateUserId(),
+    loginCode: data.loginCode || userProfile.loginCode || '',
+    name: data.name || 'Invité',
+    avatar: data.avatar || '',
+    totalXp: typeof data.totalXp === 'number' ? data.totalXp : 0,
+    rewards: Array.isArray(data.rewards) ? data.rewards : [],
+    ownedBorders: Array.isArray(data.ownedBorders) ? data.ownedBorders : [],
+    selectedBorder: data.selectedBorder || '',
+    coins: typeof data.coins === 'number' ? data.coins : 0,
+    battlePassClaimed: typeof data.battlePassClaimed === 'boolean' ? data.battlePassClaimed : false,
+    firstVisitTime: typeof data.firstVisitTime === 'number' ? data.firstVisitTime : Date.now(),
+    roles: Array.isArray(data.roles) ? data.roles : []
+  };
+}
+
+function generateLoginCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i += 1) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+function showLoginMessage(message, isError = true) {
+  if (!loginMessage) return;
+  loginMessage.textContent = message;
+  loginMessage.style.color = isError ? '#dc2626' : '#047857';
+}
+
+function logoutAccount() {
+  localStorage.removeItem(PROFILE_KEY);
+  userProfile = {
+    name: 'Invité',
+    avatar: '',
+    totalXp: 0,
+    rewards: [],
+    ownedBorders: [],
+    selectedBorder: '',
+    coins: 0,
+    battlePassClaimed: false,
+    firstVisitTime: Date.now(),
+    id: generateUserId(),
+    roles: []
+  };
+  renderProfile();
+  renderHeaderProfile();
+  updateProfileMessage('Déconnecté. Utilise ton code pour te reconnecter sur un autre appareil.');
+}
+
+function loginWithCode() {
+  if (!loginCodeInput || !profilesCollection || !firestoreReady) {
+    showLoginMessage('Connexion impossible : Firebase non disponible.');
+    return;
+  }
+  const code = (loginCodeInput.value || '').toUpperCase().trim();
+  if (code.length !== 6) {
+    showLoginMessage('Le code doit contenir 6 caractères alphanumériques.');
+    return;
+  }
+  profilesCollection.doc(code).get().then(doc => {
+    if (!doc.exists) {
+      showLoginMessage('Code introuvable. Vérifie ton code et réessaie.');
+      return;
+    }
+    userProfile = sanitizeProfileData(doc.data());
+    userProfile.loginCode = code;
+    saveProfile();
+    if (loginCodeInput) loginCodeInput.value = '';
+    renderProfile();
+    showLoginMessage('Connexion réussie.', false);
+    updateProfileMessage('Connecté avec succès.');
+  }).catch(error => {
+    console.error('Erreur de connexion par code :', error);
+    showLoginMessage('Erreur de connexion. Essaie plus tard.');
+  });
 }
 
 function createSampleLeaderboardUsers() {
@@ -376,7 +587,8 @@ function getCurrentUserLeaderboardEntry() {
     rewards: Array.isArray(userProfile.rewards) ? userProfile.rewards : [],
     ownedBorders: Array.isArray(userProfile.ownedBorders) ? userProfile.ownedBorders : [],
     selectedBorder: userProfile.selectedBorder || '',
-    coins: userProfile.coins || 0
+    coins: userProfile.coins || 0,
+    roles: Array.isArray(userProfile.roles) ? userProfile.roles : []
   };
 }
 
@@ -386,13 +598,15 @@ function updateLeaderboardForCurrentUser() {
   const userId = userProfile.id || 'current-user';
   const currentEntry = {
     id: userId,
+    loginCode: userProfile.loginCode || '',
     name: userProfile.name || 'Invité',
     avatar: userProfile.avatar || 'https://via.placeholder.com/80?text=Avatar',
     totalXp: userProfile.totalXp || 0,
     rewards: Array.isArray(userProfile.rewards) ? userProfile.rewards : [],
     ownedBorders: Array.isArray(userProfile.ownedBorders) ? userProfile.ownedBorders : [],
     selectedBorder: userProfile.selectedBorder || '',
-    coins: userProfile.coins || 0
+    coins: userProfile.coins || 0,
+    roles: Array.isArray(userProfile.roles) ? userProfile.roles : []
   };
   
   // Sauvegarder dans Firestore avec l'ID utilisateur unique
@@ -418,10 +632,17 @@ function renderLeaderboard() {
 
   filteredUsers.slice(0, 100).forEach((user, index) => {
     const level = getProfileLevel(user.totalXp);
-    const item = document.createElement('button');
-    item.type = 'button';
+    const item = document.createElement('div');
     item.className = 'leaderboard-item';
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
     item.addEventListener('click', () => showLeaderboardProfile(user));
+    item.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        showLeaderboardProfile(user);
+      }
+    });
     
     // Rang
     const rankSpan = document.createElement('span');
@@ -454,10 +675,62 @@ function renderLeaderboard() {
     levelDiv.className = 'leaderboard-item-level';
     levelDiv.textContent = `Niveau ${level}`;
     
+    const rolesDiv = document.createElement('div');
+    rolesDiv.className = 'leaderboard-item-roles';
+    if (Array.isArray(user.roles) && user.roles.length > 0) {
+      user.roles.forEach((role) => {
+        const badge = document.createElement('span');
+        badge.className = 'leaderboard-role-badge';
+        badge.textContent = role.name;
+        badge.style.backgroundColor = role.color || '#999999';
+        badge.style.color = getContrastColor(role.color || '#999999');
+        rolesDiv.appendChild(badge);
+      });
+    }
+    
     dataDiv.appendChild(nameDiv);
     dataDiv.appendChild(levelDiv);
+    dataDiv.appendChild(rolesDiv);
     item.appendChild(dataDiv);
-    
+
+    if (isAdmin) {
+      const adminRoleBtn = document.createElement('button');
+      adminRoleBtn.type = 'button';
+      adminRoleBtn.className = 'button button-small button-secondary leaderboard-role-action';
+      adminRoleBtn.textContent = 'Gérer rôles';
+      adminRoleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        manageLeaderboardRoles(user);
+      });
+      adminRoleBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          manageLeaderboardRoles(user);
+        }
+      });
+      item.appendChild(adminRoleBtn);
+
+      const deleteUserBtn = document.createElement('button');
+      deleteUserBtn.type = 'button';
+      deleteUserBtn.className = 'button button-small button-danger leaderboard-role-action';
+      deleteUserBtn.textContent = 'Supprimer compte';
+      deleteUserBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        deleteUserAccountFromLeaderboard(user);
+      });
+      deleteUserBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteUserAccountFromLeaderboard(user);
+        }
+      });
+      item.appendChild(deleteUserBtn);
+    }
+
     leaderboardList.appendChild(item);
   });
 }
@@ -654,6 +927,19 @@ function renderHeaderProfile() {
   if (headerCoinCount) {
     headerCoinCount.textContent = `${formatCoinCount(userProfile.coins || 0)} 💎`;
   }
+  if (headerProfileRoleContainer) {
+    headerProfileRoleContainer.innerHTML = '';
+    if (Array.isArray(userProfile.roles) && userProfile.roles.length > 0) {
+      userProfile.roles.forEach((role) => {
+        const badge = document.createElement('span');
+        badge.className = 'header-role-badge';
+        badge.textContent = role.name;
+        badge.style.backgroundColor = role.color || '#999999';
+        badge.style.color = getContrastColor(role.color || '#999999');
+        headerProfileRoleContainer.appendChild(badge);
+      });
+    }
+  }
 }
 
 function renderProfile() {
@@ -686,6 +972,17 @@ function renderProfile() {
     profileCoinCount.textContent = formatCoinCount(userProfile.coins || 0);
   }
 
+  const hasLoginCode = Boolean(userProfile.loginCode && userProfile.loginCode.trim());
+  if (profileConnectionInfo) {
+    profileConnectionInfo.classList.toggle('hidden', !hasLoginCode);
+    if (profileLoginCodeDisplay) {
+      profileLoginCodeDisplay.textContent = hasLoginCode ? userProfile.loginCode : '';
+    }
+  }
+  if (logoutButton) {
+    logoutButton.classList.toggle('hidden', !hasLoginCode);
+  }
+
   if (profileBorderLabel) {
     if (userProfile.selectedBorder) {
       profileBorderLabel.textContent = `Bordure active : ${userProfile.selectedBorder === 'freebordure' ? 'freebordure' : userProfile.selectedBorder}`;
@@ -695,6 +992,8 @@ function renderProfile() {
       profileBorderLabel.textContent = 'Reste 5 min sur le site pour gagner la bordure gratuite, puis débloque d’autres bordures en montant de niveau.';
     }
   }
+
+  renderProfileRoles();
 
   if (rewardList) {
     rewardList.innerHTML = '';
@@ -713,7 +1012,119 @@ function renderProfile() {
   }
 
   renderBorderOptions();
+  renderProfileRoles();
   renderHeaderProfile();
+}
+
+function renderProfileRoles() {
+  if (!profileRolesContainer) return;
+  profileRolesContainer.innerHTML = '';
+
+  if (userProfile.roles && userProfile.roles.length > 0) {
+    userProfile.roles.forEach((role) => {
+      const badge = document.createElement('span');
+      badge.className = 'profile-role-badge';
+      badge.textContent = role.name;
+      badge.style.backgroundColor = role.color || '#999999';
+      badge.style.color = getContrastColor(role.color || '#999999');
+      profileRolesContainer.appendChild(badge);
+    });
+  } else {
+    const empty = document.createElement('p');
+    empty.className = 'profile-role-empty';
+    empty.textContent = 'Aucun rôle actif.';
+    profileRolesContainer.appendChild(empty);
+  }
+}
+
+function getContrastColor(hex) {
+  if (!hex || typeof hex !== 'string') return '#ffffff';
+  const cleaned = hex.replace('#', '');
+  const intVal = parseInt(cleaned, 16);
+  if (Number.isNaN(intVal)) return '#ffffff';
+  const r = (intVal >> 16) & 255;
+  const g = (intVal >> 8) & 255;
+  const b = intVal & 255;
+  return (r * 0.299 + g * 0.587 + b * 0.114) > 186 ? '#000000' : '#ffffff';
+}
+
+function addProfileRole() {
+  if (!isAdmin) {
+    alert('Seul l\'admin peut ajouter des rôles.');
+    return;
+  }
+  const name = adminRoleNameInput ? adminRoleNameInput.value.trim() : '';
+  const color = adminRoleColorInput ? adminRoleColorInput.value : '#00aaff';
+  if (!name) {
+    alert('Indique un nom de rôle valide.');
+    return;
+  }
+  const normalizedName = name.trim();
+  if (!userProfile.roles.some(role => role.name.toLowerCase() === normalizedName.toLowerCase())) {
+    userProfile.roles.push({ name: normalizedName, color });
+    saveProfile();
+    renderProfile();
+    if (adminRoleNameInput) adminRoleNameInput.value = '';
+    updateProfileMessage(`Rôle ajouté : ${normalizedName}`);
+  } else {
+    alert('Ce rôle existe déjà dans votre profil.');
+  }
+}
+
+function removeProfileRole(roleName) {
+  if (!isAdmin) return;
+  userProfile.roles = userProfile.roles.filter(role => role.name !== roleName);
+  saveProfile();
+  renderProfile();
+}
+
+function updateLeaderboardUserRoles(userId, roles) {
+  if (!firestoreReady || !leaderboardCollection) return;
+  leaderboardCollection.doc(userId).set({ roles }, { merge: true }).catch(error => {
+    console.error('Erreur mise à jour des rôles du leaderboard :', error);
+  });
+}
+
+function addLeaderboardUserRole(user) {
+  if (!isAdmin) return;
+  const roleName = prompt('Nom du rôle à ajouter pour ' + user.name + ' :', 'VIP');
+  if (!roleName) return;
+  const roleColor = prompt('Couleur du rôle en hex (ex : #ff0000) :', '#00aaff');
+  const normalizedColor = roleColor && /^#([0-9A-F]{3}){1,2}$/i.test(roleColor) ? roleColor : '#00aaff';
+  const updatedRoles = Array.isArray(user.roles) ? [...user.roles] : [];
+  if (!updatedRoles.some(role => role.name.toLowerCase() === roleName.trim().toLowerCase())) {
+    updatedRoles.push({ name: roleName.trim(), color: normalizedColor });
+    updateLeaderboardUserRoles(user.id, updatedRoles);
+    user.roles = updatedRoles;
+    renderLeaderboard();
+  } else {
+    alert('Ce rôle est déjà attribué à cet utilisateur.');
+  }
+}
+
+function removeLeaderboardUserRole(user) {
+  if (!isAdmin) return;
+  if (!Array.isArray(user.roles) || user.roles.length === 0) {
+    alert('Cet utilisateur n\'a aucun rôle à retirer.');
+    return;
+  }
+  const roleName = prompt('Nom du rôle à retirer pour ' + user.name + ' :', user.roles[0].name);
+  if (!roleName) return;
+  const updatedRoles = user.roles.filter(role => role.name.toLowerCase() !== roleName.trim().toLowerCase());
+  updateLeaderboardUserRoles(user.id, updatedRoles);
+  user.roles = updatedRoles;
+  renderLeaderboard();
+}
+
+function manageLeaderboardRoles(user) {
+  if (!isAdmin) return;
+  const action = prompt('Tape "ajouter" pour ajouter un rôle ou "retirer" pour retirer un rôle :', 'ajouter');
+  if (!action) return;
+  if (action.toLowerCase() === 'retirer') {
+    removeLeaderboardUserRole(user);
+  } else {
+    addLeaderboardUserRole(user);
+  }
 }
 
 function toggleProfileSection() {
@@ -754,18 +1165,37 @@ function openLeaderboardModal(user) {
   }
   if (leaderboardProfileBadges) {
     leaderboardProfileBadges.innerHTML = '';
-    getDisplayBadges(user).forEach((badge) => {
-      const badgeLabel = document.createElement('span');
-      badgeLabel.className = 'leaderboard-profile-badge';
-      badgeLabel.textContent = badge;
-      leaderboardProfileBadges.appendChild(badgeLabel);
-    });
+    if (Array.isArray(user.roles) && user.roles.length > 0) {
+      user.roles.forEach((role) => {
+        const badge = document.createElement('span');
+        badge.className = 'leaderboard-role-badge';
+        badge.textContent = role.name;
+        badge.style.backgroundColor = role.color || '#999999';
+        badge.style.color = getContrastColor(role.color || '#999999');
+        leaderboardProfileBadges.appendChild(badge);
+      });
+    }
+    const rewardBadges = getDisplayBadges(user);
+    if (rewardBadges.length > 0) {
+      rewardBadges.forEach((badge) => {
+        const badgeLabel = document.createElement('span');
+        badgeLabel.className = 'leaderboard-profile-badge';
+        badgeLabel.textContent = badge;
+        leaderboardProfileBadges.appendChild(badgeLabel);
+      });
+    }
+    if ((!Array.isArray(user.roles) || user.roles.length === 0) && rewardBadges.length === 0) {
+      leaderboardProfileBadges.textContent = 'Aucun rôle ou récompense disponible.';
+    }
   }
 }
 
 function saveProfileSettings() {
   if (!profileNameInput) return;
   userProfile.name = profileNameInput.value.trim() || 'Invité';
+  if (!userProfile.loginCode) {
+    userProfile.loginCode = generateLoginCode();
+  }
   saveProfile();
   updateProfileMessage('Profil enregistré. Continue de gagner de l’expérience !');
 }
@@ -793,12 +1223,20 @@ function deleteAccount() {
   }
 
   const userId = userProfile.id || 'current-user';
+  const loginCode = userProfile.loginCode || null;
   localStorage.removeItem(PROFILE_KEY);
   
   // Supprimer du leaderboard Firestore
   if (firestoreReady && leaderboardCollection) {
     leaderboardCollection.doc(userId).delete().catch(error => {
       console.error('Erreur suppression leaderboard :', error);
+    });
+  }
+
+  // Supprimer le profil stocké par code
+  if (firestoreReady && profilesCollection && loginCode) {
+    profilesCollection.doc(loginCode).delete().catch(error => {
+      console.error('Erreur suppression profil Firestore :', error);
     });
   }
 
@@ -812,7 +1250,8 @@ function deleteAccount() {
     coins: 0,
     battlePassClaimed: false,
     firstVisitTime: Date.now(),
-    id: generateUserId()
+    id: generateUserId(),
+    roles: []
   };
 
   renderProfile();
@@ -823,7 +1262,7 @@ function deleteAccount() {
 
 function addProfileLevels() {
   if (!isAdmin) {
-    alert('Vous devez être connecté en tant qu\'admin pour ajouter des niveaux.');
+    alert('Vous devez être connecté en tant d\'admin pour ajouter des niveaux.');
     return;
   }
 
@@ -848,6 +1287,53 @@ function addProfileLevels() {
 
   awardProfileXp(xpToAdd, 'ajout admin');
   updateProfileMessage(`+${targetLevel - currentLevel} niveau${targetLevel - currentLevel > 1 ? 's' : ''} ajoutés par l\'admin.`);
+}
+
+function removeProfileLevels() {
+  if (!isAdmin) {
+    alert('Vous devez être connecté en tant d\'admin pour retirer des niveaux.');
+    return;
+  }
+
+  const amount = adminLevelAmountInput ? Number(adminLevelAmountInput.value) : 1;
+  if (!Number.isInteger(amount) || amount <= 0) {
+    alert('Indique un nombre de niveaux valide (1 ou plus).');
+    return;
+  }
+
+  const currentLevel = getProfileLevel(userProfile.totalXp);
+  if (currentLevel <= 1) {
+    alert('Ton profil est déjà au niveau minimum.');
+    return;
+  }
+
+  const targetLevel = Math.max(1, currentLevel - amount);
+  const xpToRemove = userProfile.totalXp - ((targetLevel - 1) * XP_PER_LEVEL);
+  if (xpToRemove <= 0) {
+    alert('Ton profil est déjà au niveau demandé.');
+    return;
+  }
+
+  deductProfileXp(xpToRemove, 'retrait admin');
+  updateProfileMessage(`-${currentLevel - targetLevel} niveau${currentLevel - targetLevel > 1 ? 'x' : ''} retiré${currentLevel - targetLevel > 1 ? 's' : ''} par l\'admin.`);
+}
+
+function deductProfileXp(amount, source) {
+  if (typeof amount !== 'number' || amount <= 0) return;
+  const oldLevel = getProfileLevel(userProfile.totalXp);
+  userProfile.totalXp = Math.max(0, userProfile.totalXp - amount);
+  const newLevel = getProfileLevel(userProfile.totalXp);
+
+  userProfile.rewards = [];
+  updateUserRewards();
+
+  let message = `-${amount} XP pour ${source}.`;
+  if (newLevel < oldLevel) {
+    message += ` Niveau réduit de ${oldLevel} à ${newLevel}.`;
+  }
+
+  updateProfileMessage(message);
+  renderHeaderProfile();
 }
 
 function handleAvatarUpload(event) {
@@ -2356,6 +2842,7 @@ function loginAdmin() {
   if (passwordInput === adminPassword) {
     isAdmin = true;
     updateAdminUI();
+    renderPosts();
     adminLoginButton.textContent = 'Admin connecté';
     adminLoginButton.disabled = true;
     document.getElementById('adminPassword').disabled = true;
@@ -2369,15 +2856,145 @@ function updateAdminUI() {
   showPostForm();
   showLevelsManagement();
   updateAdminProfileControls();
+  renderPosts();
+  renderLeaderboard();
 }
 
 function updateAdminProfileControls() {
-  if (!adminLevelActions) return;
-  if (isAdmin) {
-    adminLevelActions.classList.remove('hidden');
-  } else {
-    adminLevelActions.classList.add('hidden');
+  if (adminLevelActions) {
+    if (isAdmin) {
+      adminLevelActions.classList.remove('hidden');
+    } else {
+      adminLevelActions.classList.add('hidden');
+    }
   }
+  if (adminRoleActions) {
+    if (isAdmin) {
+      adminRoleActions.classList.remove('hidden');
+    } else {
+      adminRoleActions.classList.add('hidden');
+    }
+  }
+  if (adminDeleteSection) {
+    if (isAdmin) {
+      adminDeleteSection.classList.remove('hidden');
+    } else {
+      adminDeleteSection.classList.add('hidden');
+    }
+  }
+}
+
+function deleteUserAccountFromLeaderboard(user) {
+  if (!isAdmin) {
+    alert('Seul l\'admin peut supprimer des comptes.');
+    return;
+  }
+  if (!user || !user.id) {
+    alert('Impossible de supprimer ce compte : identifiant manquant.');
+    return;
+  }
+  const confirmed = confirm(`Supprimer le compte de ${user.name || 'cet utilisateur'} ? Cette action est irréversible.`);
+  if (!confirmed) return;
+
+  if (!firestoreReady || !leaderboardCollection) {
+    alert('Firebase n\'est pas disponible pour supprimer le compte.');
+    return;
+  }
+
+  const deleteActions = [];
+  deleteActions.push(
+    leaderboardCollection.doc(user.id).delete().catch(error => {
+      console.error('Erreur suppression leaderboard :', error);
+    })
+  );
+
+  if (firestoreReady && profilesCollection) {
+    if (user.loginCode) {
+      deleteActions.push(
+        profilesCollection.doc(user.loginCode).delete().catch(error => {
+          console.error('Erreur suppression profil par code :', error);
+        })
+      );
+    } else {
+      deleteActions.push(
+        profilesCollection.where('id', '==', user.id).get().then(snapshot => {
+          snapshot.forEach(item => {
+            item.ref.delete().catch(error => {
+              console.error('Erreur suppression profil par ID :', error);
+            });
+          });
+        })
+      );
+    }
+  }
+
+  Promise.all(deleteActions).then(() => {
+    alert(`Compte de ${user.name || 'l\'utilisateur'} supprimé avec succès.`);
+    if (userProfile.id === user.id) {
+      logoutAccount();
+    }
+    renderLeaderboard();
+  }).catch(error => {
+    console.error('Erreur suppression compte admin :', error);
+    alert('Erreur lors de la suppression du compte.');
+  });
+}
+
+function deleteUserAccountByCode() {
+  if (!isAdmin) {
+    alert('Seul l\'admin peut supprimer des comptes.');
+    return;
+  }
+  const code = (adminDeleteCodeInput?.value || '').toUpperCase().trim();
+  if (code.length !== 6) {
+    alert('Saisis un code de 6 caractères valide.');
+    return;
+  }
+  if (!firestoreReady || !profilesCollection) {
+    alert('Firebase n\'est pas disponible pour supprimer le compte.');
+    return;
+  }
+
+  profilesCollection.doc(code).get().then(doc => {
+    if (!doc.exists) {
+      alert('Aucun compte trouvé pour ce code.');
+      return Promise.reject('AccountNotFound');
+    }
+    const profileData = doc.data() || {};
+    const userId = profileData.id;
+
+    const deleteActions = [];
+    deleteActions.push(doc.ref.delete());
+    if (firestoreReady && leaderboardCollection) {
+      if (userId) {
+        deleteActions.push(leaderboardCollection.doc(userId).delete().catch(error => {
+          console.error('Erreur suppression leaderboard :', error);
+        }));
+      } else {
+        deleteActions.push(
+          leaderboardCollection.where('loginCode', '==', code).get().then(snapshot => {
+            snapshot.forEach(item => item.ref.delete().catch(error => {
+              console.error('Erreur suppression leaderboard :', error);
+            }));
+          })
+        );
+      }
+    }
+
+    return Promise.all(deleteActions);
+  }).then(() => {
+    alert('Compte supprimé avec succès.');
+    if (adminDeleteCodeInput) {
+      adminDeleteCodeInput.value = '';
+    }
+    renderLeaderboard();
+  }).catch(error => {
+    if (error === 'AccountNotFound') {
+      return;
+    }
+    console.error('Erreur suppression compte admin :', error);
+    alert('Erreur lors de la suppression du compte.');
+  });
 }
 
 function showLevelsManagement() {
@@ -2499,6 +3116,15 @@ if (addLevelButton) {
 if (applyLevelsButton) {
   applyLevelsButton.addEventListener('click', applyLevels);
 }
+if (addProfileLevelButton) {
+  addProfileLevelButton.addEventListener('click', addProfileLevels);
+}
+if (removeProfileLevelButton) {
+  removeProfileLevelButton.addEventListener('click', removeProfileLevels);
+}
+if (addProfileRoleButton) {
+  addProfileRoleButton.addEventListener('click', addProfileRole);
+}
 if (postHasPollCheckbox) {
   postHasPollCheckbox.addEventListener('change', togglePollFields);
 }
@@ -2542,6 +3168,15 @@ if (saveProfileButton) {
 }
 if (deleteAccountButton) {
   deleteAccountButton.addEventListener('click', deleteAccount);
+}
+if (loginButton) {
+  loginButton.addEventListener('click', loginWithCode);
+}
+if (logoutButton) {
+  logoutButton.addEventListener('click', logoutAccount);
+}
+if (adminDeleteAccountButton) {
+  adminDeleteAccountButton.addEventListener('click', deleteUserAccountByCode);
 }
 if (battlePassClaimButton) {
   battlePassClaimButton.addEventListener('click', claimBattlePassCoins);
