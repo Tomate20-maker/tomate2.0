@@ -15,6 +15,7 @@
         </div>
         <div class="header-profile-info">
           <span id="headerProfileName" class="header-profile-name">Invité</span>
+          <div id="headerProfileRoleContainer" class="header-profile-role-container"></div>
           <span id="headerCoinCount" class="header-coin-count">0 💎</span>
           <span id="headerProfileLevel" class="header-profile-level">Niveau 1 / 100</span>
           <div class="header-profile-progress">
@@ -31,6 +32,7 @@
     </div>
     <div class="container header-content">
       <h1>Bienvenue sur mon site web</h1>
+      <div class="visitor-counter">Personnes connectées dernière minute : <span id="visitorCounter">0</span></div>
     </div>
   </header>
 
@@ -73,9 +75,21 @@
               <span id="battlePassStatus" class="battle-pass-status">Clique pour réclamer ton Battle Pass.</span>
             </div>
             <div id="adminLevelActions" class="admin-level-actions hidden">
-              <label for="adminLevelAmount">Niveaux à ajouter</label>
+              <label for="adminLevelAmount">Niveaux à ajouter/retirer</label>
               <input id="adminLevelAmount" type="number" min="1" value="1" />
               <button type="button" id="addProfileLevelButton" class="button button-secondary">Ajouter des niveaux</button>
+              <button type="button" id="removeProfileLevelButton" class="button button-danger">Retirer des niveaux</button>
+            </div>
+            <div id="adminRoleActions" class="admin-role-actions hidden">
+              <label for="adminRoleNameInput">Nom du rôle</label>
+              <input id="adminRoleNameInput" type="text" placeholder="Ex : Modérateur" />
+              <label for="adminRoleColorInput">Couleur du rôle</label>
+              <input id="adminRoleColorInput" type="color" value="#00aaff" />
+              <button type="button" id="addProfileRoleButton" class="button button-secondary">Ajouter un rôle</button>
+            </div>
+            <div class="profile-role-list">
+              <h3>Rôles</h3>
+              <div id="profileRolesContainer" class="profile-roles-container"></div>
             </div>
             <p id="profileBorderLabel" class="profile-border-label"></p>
           </div>
@@ -85,7 +99,20 @@
         <label for="profileNameInput">Nom de profil</label>
         <input id="profileNameInput" type="text" placeholder="Ton nom" />
         <button id="saveProfileButton" class="button">Sauvegarder le profil</button>
+        <button id="logoutButton" class="button button-secondary hidden">Déconnexion</button>
         <button id="deleteAccountButton" class="button button-secondary">Supprimer mon compte</button>
+
+        <div class="profile-login-section">
+          <h3>Connexion par code</h3>
+          <div class="login-row">
+            <input id="loginCodeInput" type="text" maxlength="6" placeholder="Entrez ton code de 6 caractères" />
+            <button type="button" id="loginButton" class="button button-secondary">Se connecter</button>
+          </div>
+          <div id="loginMessage" class="login-message"></div>
+          <div id="profileConnectionInfo" class="profile-connection-info hidden">
+            <p>Ton code de connexion : <strong id="profileLoginCode"></strong></p>
+          </div>
+        </div>
       </div>
       <div class="profile-rewards">
         <h3>Récompenses disponibles</h3>
@@ -155,6 +182,14 @@
           <label for="adminPassword">Mot de passe admin</label>
           <input id="adminPassword" type="password" placeholder="Mot de passe admin" />
           <button type="button" id="adminLoginButton" class="button">Se connecter</button>
+        </div>
+
+        <div id="adminDeleteSection" class="admin-delete-section hidden">
+          <h3>Supprimer un compte</h3>
+          <label for="adminDeleteCodeInput">Code de connexion du compte</label>
+          <input id="adminDeleteCodeInput" type="text" maxlength="6" placeholder="6 caractères" />
+          <button type="button" id="adminDeleteAccountButton" class="button button-danger">Supprimer le compte</button>
+          <p class="admin-delete-hint">Supprime le profil du stockage des profils et du leaderboard.</p>
         </div>
 
         <div id="postFormContainer" class="post-form hidden">
