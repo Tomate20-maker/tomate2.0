@@ -102,7 +102,7 @@ let editedLevelRewards = {};
 const PROFILE_KEY = 'siteUserProfile';
 const MAX_LEVEL = 1000;
 const XP_PER_LEVEL = 100;
-const BATTLE_PASS_COINS = 0;
+const BATTLE_PASS_COINS = 100;
 const BORDER_SHOP = {
   'Bordure Lunaire 1': { price: 1000, image: './bordurelunaire1.png' },
   'Bordure Lunaire 2': { price: 2500, image: './bordurelunaire2.png' },
@@ -2167,7 +2167,7 @@ function toggleLike(postId) {
       likedPostsHistory.push(postId);
       saveLikedHistory();
       console.log(`[DEBUG Like] Saved history:`, likedPostsHistory);
-      awardProfileXp(10, 'aimer un post');
+      awardProfileXp(40, 'aimer un post');
     } else {
       console.log(`[DEBUG Like] NO XP - Already liked before`);
     }
@@ -2195,7 +2195,7 @@ function sharePost(post) {
       if (!alreadyShared) {
         sharedPosts.push(post.id);
         saveSharedPosts();
-        awardProfileXp(5, 'partager un post');
+        awardProfileXp(20, 'partager un post');
       }
     }).catch(() => {
       // Partage annulé ou non disponible
